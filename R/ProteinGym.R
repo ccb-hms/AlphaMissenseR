@@ -153,3 +153,79 @@ human_studies <- ProGym_names[grep(indx, ProGym_names)]
 # Subset to ProteinGym list to only human studies
 human_ProGym <- all_ProGym[names(all_ProGym) %in% human_studies]
 human_ProGym
+
+
+
+### ADDITIONAL CODE:
+all_ProGym <- readr::read_csv("~/AlphaMissense_data/Supplementary_Data_S8_proteingym.csv.gz")
+head(all_ProGym)
+
+
+RDS_ProGym <- readRDS("~/AlphaMissense_data/ProteinGym/all_ProGym.RDS")
+
+# Spearman Correlation
+
+The absolute value of the Spearman correlation between predicted and observed
+assay scores were calculated per MAVE experiment then averaged by UniProt ID.
+
+- Calculate Spearman Correlation between AM and MAVE assay scores for each MAVE
+experiment. Make this an absolute value.
+
+- Then, average this value by UniprotID (per protein across all MAVE studies).
+
+
+```{r}
+# Spearman correlation function
+
+ProteinGym_correlation <- function(uniprotId, alphamissense_table, clinvar_table){
+    
+    results <- cor.test(df$am_pathogenicity, df$DMS_score, method=c("spearman"), 
+                        exact = FALSE)
+    
+    results <- abs(results$estimate)
+    
+    results <- unname(results)
+    
+    return(results)
+}
+
+
+# Apply the function to each pair of data frames in the lists using lapply
+correlation_results <- lapply(1:length(filtered_dataframes), function(i) {
+    
+    cor_AM_ProGym(filtered_dataframes[[i]])
+    
+})
+
+```
+
+Average the absolute Spearman estimate by protein using the UniprotID.
+
+```{r}
+# We can grab this information from the "UniprotID" column of each dataset.
+unique_vector <- unlist(lapply(filtered_dataframes, function(df) unique(df$uniprot_id)))
+
+# Assign UniProt names to the correlation_results
+names(correlation_results) <- unique_vector
+
+# Grab the unique vector (remove dup protein names)
+UniProt_IDs <- unique(unname(unique_vector))
+
+# Average Spearman across UniProt
+avg_spearman <- lapply(1:length(UniProt_IDs), function(i) {
+    
+    # Grab each unique protein ID
+    c.id <- UniProt_IDs[i]
+    
+    # Grab the index/indices of that protein from the Spearman results list
+    idx <- which(names(correlation_results) == c.id)
+    
+    # Average the correlation
+    results <- mean(unlist(correlation_results[idx]))
+    
+    return(results)
+    
+})
+
+# Name the results with the protein ID
+names(avg_spearman) <- UniProt_IDs

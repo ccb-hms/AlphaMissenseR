@@ -13,7 +13,7 @@
 #'    4 variables:
 #'
 #' - `DMS_id`: ProteinGym assay identifier.
-#' - `Uniprot_ID`: UniProt accession identifier.
+#' - `Uniprot_ID`: UniProt identifer. Note, these are not accession codes.
 #' - `variant_id`: Mutant identifier string matching ProteinGym. 
 #'    Protein position in the middle, and the reference and mutant 
 #'    amino acid residues to the left and right of the position, respectively.
@@ -68,6 +68,24 @@ ProteinGym_DMS_data <-
     return(data)
 }
 #'
+#' Map Swiss-Prot entry name to UniProt Accession ID
+#'
+#' @noRd
+#'
+#' @import UniProt.ws
+#' 
+map_accessions <-
+    function(entryNames)
+{
+    # Convert entryNames to UniProt Accession ID
+    ws <- UniProt.ws::UniProt.ws()
+    out <- UniProt.ws::select(ws, entryNames, columns = "UniProtKB", 
+                              keytype = "UniProtKB")
+    accessions <- out$Entry
+    
+    return(accessions)
+}
+#' 
 #'
 #' Filter the AlphaMissense table with UniprotID
 #'
@@ -78,6 +96,7 @@ ProteinGym_DMS_data <-
 pg_filter_am_table <-
     function(am_table, uID)
 {
+    browser()
     ## Check if am_table is missing
     if (missing(am_table)) {
         spdl::info(paste(
@@ -86,14 +105,41 @@ pg_filter_am_table <-
         ))
         
         am_table <- ProteinGym_AlphaMissense_data()
+        
+        ## Add UniProt accessions to am_table
+        swissprot_names <- am_table |> 
+            select(.data$Uniprot_ID) |> 
+            unique() |> pull()
+        
+        acc <- map_accessions(swissprot_names)
+        
+        accessions_lookup <-
+            cbind(swissprot_names, acc) |> 
+            as.data.frame()
+        
+        ## Default able uses SwissProt. Replace SwissProt with uID
+        selected_swiss_protein <- 
+            accessions_lookup |> 
+            filter(.data$acc == uID) |> 
+            pull(.data$swissprot_names)
+        
+        am_table <-
+            am_table |>
+            mutate(
+                Uniprot_ID = case_when(
+                    (.data$Uniprot_ID) == selected_swiss_protein ~ uID,
+                    TRUE ~ as.character(Uniprot_ID)
+                )
+            )
+        am_table
     }
-    
+        
     ## Take alphamissense_table and filter for the uniprotId
     alphamissense_table <-
         am_table |>
         filter(.data$Uniprot_ID == uID) |>
         as_tibble()
-    
+
     ## Check if table is empty after filtering
     ## This will work for a tibble or a data.frame
     if (!NROW(alphamissense_table)) {
@@ -141,9 +187,66 @@ pg_filter_DMS_table <-
             )
         }
         
-        alphamissense_table
+        DMS_table
     }
 #'
+#'
+#' Prepare data for the function ProteinGym_correlation_plot
+#'
+#' @noRd
+#'
+#' @importFrom dplyr left_join mutate case_when mutate_at group_by
+#'     ungroup arrange
+#'
+proteingym_prepare_data_for_plot <-
+    function(am_table, pg_table)
+{
+    ## grab amino acid positions
+    am_table <- mutate(
+        am_table,
+        aa_pos = as.integer(
+            gsub(".*?([0-9]+).*", "\\1", .data$protein_variant)
+        )
+    )
+    
+    ## join datasets
+    combined_data <- left_join(
+        am_table,
+        cv_table,
+        by = c('uniprot_id', 'protein_variant')
+    )
+    
+    ## add color code matching AM and CV labels
+    combined_data <-
+        combined_data |>
+        mutate(
+            code_color = case_when(
+                !is.na(.data$cv_class) & .data$cv_class == "benign" ~
+                    "CV benign",
+                !is.na(.data$cv_class) & .data$cv_class == "pathogenic" ~
+                    "CV pathogenic",
+                is.na(.data$cv_class) & .data$am_class == "pathogenic" ~
+                    "AM pathogenic",
+                is.na(.data$cv_class) & .data$am_class == "benign" ~
+                    "AM benign",
+                is.na(.data$cv_class) & .data$am_class == "ambiguous" ~
+                    "AM ambiguous")
+        ) |>
+        mutate_at(vars(.data$code_color), factor) |>
+        arrange(.data$code_color)
+    
+    ## Grab the thresholds for AM pathogenicity to plot
+    combined_data <-
+        combined_data |>
+        group_by(.data$am_class) |>
+        mutate(
+            max = max(.data$am_pathogenicity, na.rm=TRUE),
+            min = min(.data$am_pathogenicity, na.rm=TRUE)
+        ) |>
+        ungroup()
+    
+    combined_data
+}
 #'
 #' @rdname ProteinGym
 #' 

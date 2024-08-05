@@ -1,107 +1,232 @@
 #' @rdname ProteinGym
 #'
-#' @title Integrate ProteinGym DMS Scores with AlphaMissense Pathogenicity 
-#' Scores
+#' @title Integrate ProteinGym DMS and AlphaMissense Pathogenicity Scores
 #'
-#' @description `ProteinGym_data()` loads ProteinGym information from the
-#'     supplemental table of the AlphaMissense
-#'     [\[2023\]](https://www.science.org/doi/10.1126/science.adg7492)
-#'     paper.
-#'
-#' @param record character(1) Zenodo record for the AlphaMissense data
-#'     resources.
-#'
-#' @param bfc an object returned by `BiocFileCache()` representing the
-#'     location of the AlphaMissenseR database. The default is the
-#'     'global' BiocFileCache.
+#' @description `ProteinGym_AlphaMissense_data()` loads in the AlphaMissense 
+#'    pathogenicity scores for mutants in ProteinGym from the AlphaMissense 
+#'    publication by Cheng et al. 
+#'    ([2023](https://www.science.org/doi/10.1126/science.adg7492)).
 #'
 #' @return
 #'
-#' `ProteinGym_data()` returns a tbl with 82872 rows and 5 variables:
+#' `ProteinGym_AlphaMissense_data()` returns a data.frame with 1622429 rows and
+#'    4 variables:
 #'
-#' - `variant_id`: ClinVar variant identifier.
-#' - `transcript_id`: Ensembl transcript identifier.
-#' - `protein_variant`: UniProt accession:protein variant identifier.
+#' - `DMS_id`: ProteinGym assay identifier.
+#' - `Uniprot_ID`: UniProt accession identifier.
+#' - `variant_id`: Mutant identifier string matching ProteinGym. 
+#'    Protein position in the middle, and the reference and mutant 
+#'    amino acid residues to the left and right of the position, respectively.
 #' - `AlphaMissense`: AlphaMissense pathogenicity score.
-#' - `label`: Binary ClinVar class, either "benign" or "pathogenic".
 #'
 #' @examples
-#' ProteinGym_data()
-#' @export
+#' am_table <- ProteinGym_AlphaMissense_data()
 #' 
-ProteinGym_data <- ## load in AlphaMissense PG supplement from EH
-    function (metadata = FALSE)
+#' @export
+ProteinGym_AlphaMissense_data <-
+    function ()
 {
     eh <- ExperimentHub::ExperimentHub()
-    title <- "ProteinGym_Supplemental"
-        
-    eh <- AnnotationHub::query(eh, title)
-    ehid <- eh$ah_id
-        
-    if (metadata == TRUE) {
-        eh[ehid]
-    }
-    else eh[[ehid]]
+    data <- eh[['EH9554']]
+    return(data)
 }
-
+#'
+#'
 #' @rdname ProteinGym
 #'
-#' @description `ProteinGym_correlate()` runs a Spearman correlation between 
-#'    ProteinGym deep mutational scanning (DMS) assay scores with AlphaMissense 
-#'    predicted scores. Returns a ggplot object for visualization.
+#' @description `ProteinGym_DMS_data()` loads in 216 ProteinGym deep mutational 
+#' scanning assays (DMS) for substitutions. The data is provided by Notin et. al
+#' [(2023)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10723403/).
+#'
+#' @return
+#'
+#' `ProteinGym_DMS_data()` returns a list of 216 data.frames corresponding to
+#'    individual DMS assays. Each table contains the following 6 columns:
+#'
+#' - `UniProt_id`: UniProt accession identifier.
+#' - `DMS_id`: ProteinGym assay identifier.
+#' - `mutant`: Mutant identifier string matching AlphaMissense variants. 
+#'    Specifically, the set of substitutions to apply on the reference sequence 
+#'    to obtain the mutated sequence (e.g., A1P:D2N implies the amino acid 'A' 
+#'    at position 1 should be replaced by 'P', and 'D' at position 2 should be 
+#'    replaced by 'N').
+#' - `mutated_sequence`: Full amino acid sequence for the mutated protein.
+#' - `DMS_score`: Experimental measurement in the DMS assay. 
+#'    Higher values indicate higher fitness of the mutated protein.
+#' - `DMS_score_bin`: Factor, indicating whether the DMS_score is 
+#'    above the fitness cutoff (1 is fit, 0 is not fit).
+#'
+#' @examples
+#' pg_data <- ProteinGym_DMS_data()
+#' 
+#' @export
+ProteinGym_DMS_data <-
+    function ()
+{
+    eh <- ExperimentHub::ExperimentHub()
+    data <- eh[['EH9555']]
+    return(data)
+}
+#'
+#'
+#' Filter the AlphaMissense table with UniprotID
+#'
+#' @noRd
+#'
+#' @importFrom dplyr filter as_tibble vars
+#'
+pg_filter_am_table <-
+    function(am_table, uID)
+{
+    ## Check if am_table is missing
+    if (missing(am_table)) {
+        spdl::info(paste(
+            "'alphamissense_table' not provided, using default table from",
+            "`ProteinGym_AlphaMissense_data()`"
+        ))
+        
+        am_table <- ProteinGym_AlphaMissense_data()
+    }
+    
+    ## Take alphamissense_table and filter for the uniprotId
+    alphamissense_table <-
+        am_table |>
+        filter(.data$Uniprot_ID == uID) |>
+        as_tibble()
+    
+    ## Check if table is empty after filtering
+    ## This will work for a tibble or a data.frame
+    if (!NROW(alphamissense_table)) {
+        stop(
+            "no AlphaMissense information found for the protein ",
+            "accession '", uID, "'; check that the UniProt ID is correct"
+        )
+    }
+    
+    alphamissense_table
+}
+#'
+#'
+#'#' Filter the DMS table with UniprotID
+#'
+#' @noRd
+#'
+#' @importFrom dplyr filter as_tibble vars
+#'
+pg_filter_DMS_table <-
+    function(pg_table, uID)
+    {
+        ## Check if am_table is missing
+        if (missing(pg_table)) {
+            spdl::info(paste(
+                "'DMS_table' not provided, using default table from",
+                "`ProteinGym_DMS_data()`"
+            ))
+            
+            pg_table <- ProteinGym_DMS_data()
+        }
+        
+        ## Take alphamissense_table and filter for the uniprotId
+        DMS_table <-
+            pg_table |>
+            filter(.data$UniProt_id == uID) |>
+            as_tibble()
+        
+        ## Check if table is empty after filtering
+        ## This will work for a tibble or a data.frame
+        if (!NROW(DMS_table)) {
+            stop(
+                "no DMS information found for the protein ",
+                "accession '", uID, "'"
+            )
+        }
+        
+        alphamissense_table
+    }
+#'
+#'
+#' @rdname ProteinGym
+#' 
+#' @description `ProteinGym_correlation_plot()` runs a Spearman correlation between 
+#'    ProteinGym deep mutational scanning (DMS) assay scores against 
+#'    AlphaMissense predicted scores. Returns a ggplot object for visualization.
 #'
 #' @param uniprotId `character()` a valid UniProt accession identifier.
-#'
-#' @param alphamissense_table a table containing AlphaMissense
-#'    predictions for protein variants matching ProteinGym variants. The default 
+#' 
+#' @param alphamissense_table a table containing AlphaMissense predictions 
+#'    for variants matching ProteinGym substitution mutants. The default 
 #'    table is derived from the supplemental data of the AlphaMissense paper. 
 #'    Alternatively, a user-defined [`tibble::tbl_df`] or [`data.frame`]
 #'    can be supplied.
-#'    
-#' @param DMS_table a table containing ProteinGym deep mutational scanning (DMS) 
-#'    assay scores for protein variants matching AlphaMissense variants. The
-#'    default table loads in subsitutions from 
+#'
+#' @param DMS_table a table containing deep mutational scanning (DMS) 
+#'    assay scores for protein variants matching AlphaMissense. The default 
+#'    table loads in substitutions from 
 #'    [ProteinGym](https://proteingym.org/download).
 #'    Alternatively, a user-defined [`tibble::tbl_df`] or [`data.frame`]
 #'    can be supplied.
 #'
 #' @details
 #'
-#' For `ProteinGym_correlate()`, `alphamissense_table` columns must include:
+#' For `ProteinGym_correlation_plot()`, 
+#'    `alphamissense_table` columns must include:
 #'
-#' - `uniprot_id`: UniProt accession identifier.
-#' - `DMS`
-#' - `protein_variant`: variant identifier string, with protein
-#'    position in the middle, and the reference and mutant amino acid
-#'    residues to the left and right of the position, respectively.
-#' - `DMS`: AlphaMissense classification of either "benign",
-#'    "ambiguous", or "pathogenic".
-#' - `am_pathogenicity`: AlphaMissense predicted score.
+#' - `Uniprot_ID`: UniProt accession identifier.
+#' - `variant_id`: Mutant identifier string matching ProteinGym. 
+#'    Protein position in the middle, and the reference and mutant 
+#'    amino acid residues to the left and right of the position, respectively.
+#' - `AlphaMissense`: AlphaMissense pathogenicity score.
 #'
 #' `DMS_table` columns must include:
 #'
-#' - `uniprot_id`: UniProt accession identifier, matching `alphamissense_table`.
-#' - `protein_variant`: variant identifier string, matching
-#'    `alphamissense_table` format.
-#' - `cv_class`: binary ClinVar classification of "benign" or "pathogenic".
+#' - `UniProt_id`: UniProt accession identifier.
+#' - `mutant`: Mutant identifier string matching AlphaMissense variants. 
+#'    Specifically, the set of substitutions to apply on the reference sequence 
+#'    to obtain the mutated sequence (e.g., A1P:D2N implies the amino acid 'A' 
+#'    at position 1 should be replaced by 'P', and 'D' at position 2 should be 
+#'    replaced by 'N').
+#' - `DMS_score`: Experimental measurement in the DMS assay. 
+#'    Higher values indicate higher fitness of the mutated protein.
 #'
-#' @return `clinvar_plot()` returns a `ggplot` object which overlays
-#'    ClinVar classifications onto AlphaMissense predicted
-#'    scores. Blue, gray, and red colors represent pathogenicity
-#'    classifications for "likely benign", "ambiguous", or
-#'    "likely pathogenic", respectively. Large, bolded points are
-#'    ClinVar variants colored according to their clinical
-#'    classification, while smaller points in the background are
-#'    AlphaMissense predictions.
+#' @return `ProteinGym_correlation_plot()` returns a `ggplot` object visualizing the 
+#'    Spearman correlation between experimental DMS scores and AlphaMissense 
+#'    predicted scores. In our case, a stronger negative correlation correspond 
+#'    to a stronger relationship between the two measures.
 #'
 #' @examples
-#'
-#' alphamissense_table <- am_data("aa_substitutions")
-#'
-#' clinvar_plot(
-#'     uniprotId = "P37023",
-#'     alphamissense_table = alphamissense_table
-#' )
+#' 
+#' ProteinGym_correlation_plot(uniprotId = "Q9NV35")
+#' 
+#' @export
+ProteinGym_correlation_plot <-
+    function(uniprotId, alphamissense_table, DMS_table)
+{
+    ## Validate uniprotId to start filtering alphamissense and clinvar tables
+    stopifnot(isCharacter(uniprotId))
+    
+    ## Filter AM and PG tables with uniProtID
+    alphamissense_table <-
+        pg_filter_am_table(
+            am_table = alphamissense_table,
+            uID = uniprotId
+        )
+    
+    DMS_table <-
+        pg_filter_DMS_table(
+            pg_table = DMS_table,
+            uID = uniprotId
+        )
+    
+ # results <- cor.test(df$am_pathogenicity, df$DMS_score, method=c("spearman")) 
+                            #                         exact = FALSE)
+                            #     
+                            #     results <- abs(results$estimate)
+                            #     
+                            #     results <- unname(results)
+                            #     
+                            #     return(results)
+}
+
 #'
 #' @references Cheng et al.,
 #' Accurate proteome-wide missense variant effect prediction with AlphaMissense.
@@ -113,8 +238,6 @@ ProteinGym_data <- ## load in AlphaMissense PG supplement from EH
 #'
 #' @importFrom dplyr is.tbl
 #'
-#' @export
-#' 
 # ProteinGym_correlation <- function(uniprotId, alphamissense_table, clinvar_table){
 #     
 #     results <- cor.test(df$am_pathogenicity, df$DMS_score, method=c("spearman"), 

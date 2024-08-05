@@ -96,7 +96,6 @@ map_accessions <-
 pg_filter_am_table <-
     function(am_table, uID)
 {
-    browser()
     ## Check if am_table is missing
     if (missing(am_table)) {
         spdl::info(paste(
@@ -117,7 +116,7 @@ pg_filter_am_table <-
             cbind(swissprot_names, acc) |> 
             as.data.frame()
         
-        ## Default able uses SwissProt. Replace SwissProt with uID
+        ## Default table uses SwissProt. Replace query protein with UniProt
         selected_swiss_protein <- 
             accessions_lookup |> 
             filter(.data$acc == uID) |> 
@@ -161,34 +160,34 @@ pg_filter_am_table <-
 #'
 pg_filter_DMS_table <-
     function(pg_table, uID)
-    {
-        ## Check if am_table is missing
-        if (missing(pg_table)) {
-            spdl::info(paste(
-                "'DMS_table' not provided, using default table from",
-                "`ProteinGym_DMS_data()`"
-            ))
-            
-            pg_table <- ProteinGym_DMS_data()
-        }
+{
+    ## Check if am_table is missing
+    if (missing(pg_table)) {
+        spdl::info(paste(
+            "'DMS_table' not provided, using default table from",
+            "`ProteinGym_DMS_data()`"
+        ))
         
-        ## Take alphamissense_table and filter for the uniprotId
-        DMS_table <-
-            pg_table |>
-            filter(.data$UniProt_id == uID) |>
-            as_tibble()
-        
-        ## Check if table is empty after filtering
-        ## This will work for a tibble or a data.frame
-        if (!NROW(DMS_table)) {
-            stop(
-                "no DMS information found for the protein ",
-                "accession '", uID, "'"
-            )
-        }
-        
-        DMS_table
+        pg_table <- ProteinGym_DMS_data()
     }
+    
+    ## Take alphamissense_table and filter for the uniprotId
+    DMS_table <-
+        pg_table |>
+        filter(.data$UniProt_id == uID) |>
+        as_tibble()
+    
+    ## Check if table is empty after filtering
+    ## This will work for a tibble or a data.frame
+    if (!NROW(DMS_table)) {
+        stop(
+            "no DMS information found for the protein ",
+            "accession '", uID, "'"
+        )
+    }
+    
+    DMS_table
+}
 #'
 #'
 #' Prepare data for the function ProteinGym_correlation_plot

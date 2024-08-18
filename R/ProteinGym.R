@@ -1,83 +1,49 @@
 #' @rdname ProteinGym
 #'
-#' @title Integrate ProteinGym DMS and AlphaMissense Pathogenicity Scores
-#'
-#' @description `ProteinGym_AlphaMissense_data()` loads in the AlphaMissense 
-#'    pathogenicity scores for mutants in ProteinGym from the AlphaMissense 
-#'    publication by Cheng et al. 
-#'    ([2023](https://www.science.org/doi/10.1126/science.adg7492)).
-#'
-#' @return
-#'
-#' `ProteinGym_AlphaMissense_data()` returns a data.frame with 1622429 rows and
-#'    4 variables:
-#'
-#' - `DMS_id`: ProteinGym assay identifier.
-#' - `Uniprot_ID`: UniProt identifer. Note, these are not accession codes.
-#' - `variant_id`: Mutant identifier string matching ProteinGym. 
-#'    Protein position in the middle, and the reference and mutant 
-#'    amino acid residues to the left and right of the position, respectively.
-#' - `AlphaMissense`: AlphaMissense pathogenicity score.
-#'
-#' @examples
-#' am_table <- ProteinGym_AlphaMissense_data()
+#' Load in AlphaMissense DMS supplemental table via ExperimentHub 
+#' Through ProteinGymR later
 #' 
-#' @export
-ProteinGym_AlphaMissense_data <-
-    function ()
+#' @noRd
+#'
+#' @importFrom dplyr filter as_tibble vars
+#'
+pg_am_data <-
+    function()
 {
+    # am_data <- ProteinGymR::AlphaMissense_scores()
+
     eh <- ExperimentHub::ExperimentHub()
-    data <- eh[['EH9554']]
-    return(data)
+    am_data <- eh[['EH9554']]
+    return(am_data)
 }
-#'
-#'
-#' @rdname ProteinGym
-#'
-#' @description `ProteinGym_DMS_data()` loads in 216 ProteinGym deep mutational 
-#' scanning assays (DMS) for substitutions. The data is provided by Notin et. al
-#' [(2023)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10723403/).
-#'
-#' @return
-#'
-#' `ProteinGym_DMS_data()` returns a list of 216 data.frames corresponding to
-#'    individual DMS assays. Each table contains the following 6 columns:
-#'
-#' - `UniProt_id`: UniProt accession identifier.
-#' - `DMS_id`: ProteinGym assay identifier.
-#' - `mutant`: Mutant identifier string matching AlphaMissense variants. 
-#'    Specifically, the set of substitutions to apply on the reference sequence 
-#'    to obtain the mutated sequence (e.g., A1P:D2N implies the amino acid 'A' 
-#'    at position 1 should be replaced by 'P', and 'D' at position 2 should be 
-#'    replaced by 'N').
-#' - `mutated_sequence`: Full amino acid sequence for the mutated protein.
-#' - `DMS_score`: Experimental measurement in the DMS assay. 
-#'    Higher values indicate higher fitness of the mutated protein.
-#' - `DMS_score_bin`: Factor, indicating whether the DMS_score is 
-#'    above the fitness cutoff (1 is fit, 0 is not fit).
-#'
-#' @examples
-#' pg_data <- ProteinGym_DMS_data()
+
+#' Load in ProteinGym DMS dataset via ExperimentHub (through ProteinGymR later)
 #' 
-#' @export
-ProteinGym_DMS_data <-
-    function ()
-{
-    eh <- ExperimentHub::ExperimentHub()
-    data <- eh[['EH9555']]
-    return(data)
-}
+#' @noRd
 #'
+#' @importFrom dplyr filter as_tibble vars
+#' 
+pg_dms_data <-
+    function()
+{
+    # dms_data <- ProteinGymR::dms_substitutions()
+        
+    eh <- ExperimentHub::ExperimentHub()
+    dms_data <- eh[['EH9555']]
+    return(dms_data)
+}
+
 #' Map Swiss-Prot entry name to UniProt Accession ID
+#' Later, use ProteinGymR function
 #'
 #' @noRd
 #'
 #' @import UniProt.ws
 #' 
-map_accessions <-
+pg_map_accessions <-
     function(entryNames)
 {
-    # Convert entryNames to UniProt Accession ID
+    # Convert SwissProt entries to UniProt accession ID
     ws <- UniProt.ws::UniProt.ws()
     out <- UniProt.ws::select(ws, entryNames, columns = "UniProtKB", 
                               keytype = "UniProtKB")
@@ -85,38 +51,39 @@ map_accessions <-
     
     return(accessions)
 }
-#' 
-#'
+
 #' Filter the AlphaMissense table with UniprotID
 #'
 #' @noRd
-#'
+#' 
 #' @importFrom dplyr filter as_tibble vars
-#'
+#' 
 pg_filter_am_table <-
     function(am_table, uID)
 {
+
     ## Check if am_table is missing
     if (missing(am_table)) {
         spdl::info(paste(
             "'alphamissense_table' not provided, using default table from",
-            "`ProteinGym_AlphaMissense_data()`"
+            "`ProteinGymR::am_scores()`"
         ))
         
-        am_table <- ProteinGym_AlphaMissense_data()
+        am_table <- pg_am_data()
         
         ## Add UniProt accessions to am_table
         swissprot_names <- am_table |> 
             select(.data$Uniprot_ID) |> 
             unique() |> pull()
         
-        acc <- map_accessions(swissprot_names)
+        acc <- pg_map_accessions(swissprot_names)
         
         accessions_lookup <-
             cbind(swissprot_names, acc) |> 
             as.data.frame()
         
-        ## Default table uses SwissProt. Replace query protein with UniProt
+        ## Default am_table uses SwissProt
+        ## Replace with corresponding UniProt ID in table
         selected_swiss_protein <- 
             accessions_lookup |> 
             filter(.data$acc == uID) |> 
@@ -133,7 +100,7 @@ pg_filter_am_table <-
         am_table
     }
         
-    ## Take alphamissense_table and filter for the uniprotId
+    ## Take alphamissense_table and filter for uID
     alphamissense_table <-
         am_table |>
         filter(.data$Uniprot_ID == uID) |>
@@ -150,46 +117,48 @@ pg_filter_am_table <-
     
     alphamissense_table
 }
+
 #'
-#'
-#'#' Filter the DMS table with UniprotID
+#' Filter the ProteinGym DMS table with UniprotID
 #'
 #' @noRd
 #'
-#' @importFrom dplyr filter as_tibble vars
+#' @importFrom dplyr filter as_tibble vars bind_rows
+#' @importFrom purrr keep
 #'
-pg_filter_DMS_table <-
+pg_filter_dms_table <-
     function(pg_table, uID)
 {
-    ## Check if am_table is missing
+    ## Check if pg_table is missing
     if (missing(pg_table)) {
         spdl::info(paste(
-            "'DMS_table' not provided, using default table from",
-            "`ProteinGym_DMS_data()`"
+            "'dms_table' not provided, using default table from",
+            "`ProteinGymR::dms_substitutions()`"
         ))
         
-        pg_table <- ProteinGym_DMS_data()
+        pg_table <- pg_dms_data()
     }
     
-    ## Take alphamissense_table and filter for the uniprotId
-    DMS_table <-
-        pg_table |>
-        filter(.data$UniProt_id == uID) |>
+    ## Take pg_table and filter for the uID, rbind into one data.frame
+    filtered_dfs <- purrr::keep(pg_table, ~ any(.x$UniProt_id == uID))
+    
+    dms_table <-
+        filtered_dfs |>
+        bind_rows() |>
         as_tibble()
     
     ## Check if table is empty after filtering
     ## This will work for a tibble or a data.frame
-    if (!NROW(DMS_table)) {
+    if (!NROW(dms_table)) {
         stop(
-            "no DMS information found for the protein ",
+            "no DMS substitution information found for the protein ",
             "accession '", uID, "'"
         )
     }
     
-    DMS_table
+    dms_table
 }
-#'
-#'
+
 #' Prepare data for the function ProteinGym_correlation_plot
 #'
 #' @noRd
@@ -246,8 +215,11 @@ proteingym_prepare_data_for_plot <-
     
     combined_data
 }
+
 #'
 #' @rdname ProteinGym
+#' 
+#' @title Integrate ProteinGym DMS and AlphaMissense Pathogenicity Scores
 #' 
 #' @description `ProteinGym_correlation_plot()` runs a Spearman correlation between 
 #'    ProteinGym deep mutational scanning (DMS) assay scores against 
@@ -299,7 +271,6 @@ proteingym_prepare_data_for_plot <-
 #' 
 #' ProteinGym_correlation_plot(uniprotId = "Q9NV35")
 #' 
-#' @export
 ProteinGym_correlation_plot <-
     function(uniprotId, alphamissense_table, DMS_table)
 {

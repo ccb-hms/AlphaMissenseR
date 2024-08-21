@@ -60,4 +60,19 @@ Higher values indicate higher fitness of the mutated protein.
 
 ProteinGym_correlation_plot(uniprotId = "Q9NV35")
 
+
+}
+\references{
+Cheng et al.,
+Accurate proteome-wide missense variant effect prediction with AlphaMissense.
+\emph{Science} 381, eadg7492. DOI:10.1126/science.adg7492.
+
+Notin, P., Kollasch, A., Ritter, D., van Niekerk, L., Paul, S.,
+Spinner, H., Rollins, N., Shaw, A., Orenbuch, R., Weitzman, R., Frazer, J.,
+Dias, M., Franceschi, D., Gal, Y., & Marks, D. (2023).
+ProteinGym: Large-Scale
+Benchmarks for Protein Fitness Prediction and Design. In A. Oh, T. Neumann,
+A. Globerson, K. Saenko, M. Hardt, & S. Levine (Eds.), \emph{Advances in
+Neural Information Processing Systems} (Vol. 36, pp. 64331-64379).
+Curran Associates, Inc.
 }

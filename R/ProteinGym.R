@@ -188,7 +188,8 @@ pg_match_id <-
             by = c("UniProt_id", "mutant"),
             relationship = "many-to-many"
         ) |> 
-        select(UniProt_id, mutant, AlphaMissense, DMS_score)
+        select(UniProt_id, mutant, AlphaMissense, DMS_score) |> 
+        na.omit()
     
     merged_table
 }
@@ -322,6 +323,7 @@ pg_prepare_data_for_plot <-
 #'    amino acid residues to the left and right of the position, respectively.
 #' - `AlphaMissense`: AlphaMissense pathogenicity score.
 #'
+#'
 #' `DMS_table` columns must include:
 #'
 #' - `UniProt_id`: UniProt accession identifier.
@@ -342,6 +344,21 @@ pg_prepare_data_for_plot <-
 #' 
 #' ProteinGym_correlation_plot(uniprotId = "Q9NV35")
 #' 
+#' 
+#' @references Cheng et al.,
+#' Accurate proteome-wide missense variant effect prediction with AlphaMissense.
+#' \emph{Science} 381, eadg7492. DOI:10.1126/science.adg7492.
+#' 
+#' @references Notin, P., Kollasch, A., Ritter, D., van Niekerk, L., Paul, S., 
+#' Spinner, H., Rollins, N., Shaw, A., Orenbuch, R., Weitzman, R., Frazer, J., 
+#' Dias, M., Franceschi, D., Gal, Y., & Marks, D. (2023). 
+#' ProteinGym: Large-Scale 
+#' Benchmarks for Protein Fitness Prediction and Design. In A. Oh, T. Neumann, 
+#' A. Globerson, K. Saenko, M. Hardt, & S. Levine (Eds.), \emph{Advances in 
+#' Neural Information Processing Systems} (Vol. 36, pp. 64331-64379). 
+#' Curran Associates, Inc.
+#' 
+#' @export
 ProteinGym_correlation_plot <-
     function(uniprotId, alphamissense_table, dms_table)
 {
@@ -355,26 +372,56 @@ ProteinGym_correlation_plot <-
             uID = uniprotId
         )
     
-    DMS_table <-
-        pg_filter_DMS_table(
-            pg_table = DMS_table,
+    dms_table <-
+        pg_filter_dms_table(
+            pg_table = dms_table,
             uID = uniprotId
         )
     
- # results <- cor.test(df$am_pathogenicity, df$DMS_score, method=c("spearman")) 
-                            #                         exact = FALSE)
-                            #     
-                            #     results <- abs(results$estimate)
-                            #     
-                            #     results <- unname(results)
-                            #     
-                            #     return(results)
-}
-
-#'
-#' @references Cheng et al.,
-#' Accurate proteome-wide missense variant effect prediction with AlphaMissense.
-#' \emph{Science} 381, eadg7492. DOI:10.1126/science.adg7492.
+    ## Join tables by UniProt ID
+    merged_table <-
+        pg_match_id(am_table = alphamissense_table, pg_table = dms_table)
+    
+    ## Check if merged table is empty
+    if (!NROW(merged_table)) {
+        stop(
+            "no common mutants between AlphaMissense and DMS scores for ",
+            "accession '", uID, "'"
+        )
+    }
+    
+    cor_results <- pg_correlate(merged_table)
+    
+    ## Correlation density plot
+    pg_density_plot <- 
+        merged_table |> 
+        ggplot(
+            aes(y = .data$AlphaMissense, x = .data$DMS_score)
+        ) +
+        geom_bin2d(bins = 70) +
+        scale_fill_continuous(type = "viridis") +
+        theme_classic() +
+        labs(title = paste0("UniProt ID: ", uniprotId)) +
+        xlab("DMS score") +
+        ylab("AlphaMissense pathogenicity score") +
+        theme_classic() +
+        theme(
+            axis.text.x = element_text(size = 16),
+            axis.text.y = element_text(size = 16),
+            axis.title.y = element_text(size = 16, vjust = 2),
+            axis.title.x = element_text(size = 16, vjust = 0),
+            legend.title = element_text(size = 16),
+            legend.text = element_text(size = 16)
+        ) +
+        annotate("text", x=Inf, y = Inf, hjust = 1, vjust = 2,
+            label = paste0("r = ", format(round(cor_results$estimate, 2)), 
+                '\n',"Pval = ", cor_results$p.value),
+            fontface="italic", size = 4
+        )
+    
+    pg_density_plot
+}         
+        
 #'
 #' @importFrom BiocBaseUtils isCharacter
 #'

@@ -4,7 +4,7 @@
 \alias{ProteinGym_correlation_plot}
 \title{Integrate ProteinGym DMS and AlphaMissense Pathogenicity Scores}
 \usage{
-ProteinGym_correlation_plot(uniprotId, alphamissense_table, DMS_table)
+ProteinGym_correlation_plot(uniprotId, alphamissense_table, dms_table)
 }
 \arguments{
 \item{uniprotId}{\code{character()} a valid UniProt accession identifier.}

@@ -10,11 +10,11 @@
 pg_am_data <-
     function()
 {
-    # am_data <- ProteinGymR::AlphaMissense_scores()
+    # am_table <- ProteinGymR::AlphaMissense_scores()
 
     eh <- ExperimentHub::ExperimentHub()
-    am_data <- eh[['EH9554']]
-    return(am_data)
+    am_table <- eh[['EH9554']]
+    return(am_table)
 }
 
 #' Load in ProteinGym DMS dataset via ExperimentHub (through ProteinGymR later)
@@ -26,11 +26,11 @@ pg_am_data <-
 pg_dms_data <-
     function()
 {
-    # dms_data <- ProteinGymR::dms_substitutions()
+    # dms_table <- ProteinGymR::dms_substitutions()
         
     eh <- ExperimentHub::ExperimentHub()
-    dms_data <- eh[['EH9555']]
-    return(dms_data)
+    dms_table <- eh[['EH9555']]
+    return(dms_table)
 }
 
 #' Map Swiss-Prot entry name to UniProt Accession ID
@@ -51,7 +51,7 @@ pg_map_accessions <-
     
     return(accessions)
 }
-
+        
 #' Filter the AlphaMissense table with UniprotID
 #'
 #' @noRd
@@ -82,13 +82,12 @@ pg_filter_am_table <-
             cbind(swissprot_names, acc) |> 
             as.data.frame()
         
-        ## Default am_table uses SwissProt
+        ## Replace default SwissProt with corresponding UniProt in am_table
         selected_swiss_protein <- 
             accessions_lookup |> 
             filter(.data$acc == uID) |> 
             pull(.data$swissprot_names)
         
-        ## Replace SwissProt with corresponding UniProt ID in am_table
         am_table <-
             am_table |>
             mutate(
@@ -96,11 +95,10 @@ pg_filter_am_table <-
                     (.data$Uniprot_ID) == selected_swiss_protein ~ uID,
                     TRUE ~ as.character(Uniprot_ID)
                 )
-            ) |> 
-            as_tibble()
+            )
         
         ## Rename columns to match default dms_table
-        new_cols <- c('UniProt_ID', 'mutant')
+        new_cols <- c('UniProt_id', 'mutant')
 
         am_table <- 
             am_table |> 
@@ -115,7 +113,7 @@ pg_filter_am_table <-
     ## Filter for uID
     alphamissense_table <-
         am_table |>
-        filter(.data$UniProt_ID == uID) |>
+        filter(.data$UniProt_id == uID) |> 
         as_tibble()
 
     ## Check if table is empty after filtering
@@ -160,7 +158,6 @@ pg_filter_dms_table <-
         as_tibble()
     
     ## Check if table is empty after filtering
-    ## This will work for a tibble or a data.frame
     if (!NROW(dms_table)) {
         stop(
             "no DMS substitution information found for the protein ",
@@ -169,6 +166,50 @@ pg_filter_dms_table <-
     }
     
     dms_table
+}
+
+#' Merge alphamissense and dms tables by UniProt and mutant IDs
+#'
+#' @noRd
+#'
+#' @importFrom dplyr left_join
+#' 
+pg_match_id <- 
+    function(am_table, pg_table)
+{
+    ## Check that UniProt IDs are the same across tables
+    stopifnot(
+        unique(am_table$UniProt_id) == unique(pg_table$UniProt_id)
+    )
+        
+    merged_table <- 
+        left_join(
+            am_table, pg_table, 
+            by = c("UniProt_id", "mutant"),
+            relationship = "many-to-many"
+        ) |> 
+        select(UniProt_id, mutant, AlphaMissense, DMS_score)
+    
+    merged_table
+}
+
+#' Average Spearman correlation per protein
+#'
+#' @noRd
+#'
+#' @importFrom dplyr left_join mutate case_when mutate_at group_by
+#'     ungroup arrange
+#'
+pg_correlate <- function(merged_table){
+    
+    cor_results <- 
+        cor.test(
+            merged_table$AlphaMissense, merged_table$DMS_score, 
+            method=c("spearman"), 
+            exact = FALSE
+        )
+    
+    cor_results
 }
 
 #' Prepare dms and alphamissense data for correlation plotting
@@ -186,20 +227,19 @@ pg_prepare_data_for_plot <-
     pg_table <- 
         pg_table |> 
         mutate(tmp_id = paste(UniProt_id, mutant, sep = "_")) |> 
-        select()
+        select(UniProt_id, DMS_id, mutant, tmp_id, DMS_score)
     
     am_table <- 
         am_table |> 
-        mutate(tmp_id = paste(Uniprot_ID, variant_id, sep = "_"))
-    
-    
+        mutate(tmp_id = paste(UniProt_id, mutant, sep = "_")) |> 
+        select(UniProt_id, DMS_id, mutant, tmp_id, AlphaMissense)
     
     both_table <- 
         left_join(
             am_table, pg_table, 
-            by = "tmp_id",
-            relationship = "many-to-many"
-        )
+            by = c("UniProt_id", "mutant")
+        ) |> 
+        distinct()
         
     am_table <- mutate(
         am_table,
@@ -303,7 +343,7 @@ pg_prepare_data_for_plot <-
 #' ProteinGym_correlation_plot(uniprotId = "Q9NV35")
 #' 
 ProteinGym_correlation_plot <-
-    function(uniprotId, alphamissense_table, DMS_table)
+    function(uniprotId, alphamissense_table, dms_table)
 {
     ## Validate uniprotId to start filtering alphamissense and clinvar tables
     stopifnot(isCharacter(uniprotId))

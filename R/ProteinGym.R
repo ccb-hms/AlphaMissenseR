@@ -292,6 +292,11 @@ pg_correlate <- function(merged_table){
 #' Neural Information Processing Systems} (Vol. 36, pp. 64331-64379). 
 #' Curran Associates, Inc.
 #' 
+#' @importFrom ggplot2 ggplot geom_bin2d aes scale_colour_manual element_text
+#'     scale_fill_manual scale_shape_manual scale_size_manual scale_fill_continuous
+#'     element_blank scale_discrete_manual geom_hline labs xlab ylab 
+#'     theme_classic annotate theme
+#' 
 #' @export
 ProteinGym_correlation_plot <-
     function(uniprotId, alphamissense_table, dms_table)
@@ -354,12 +359,4 @@ ProteinGym_correlation_plot <-
         )
     
     pg_density_plot
-}         
-        
-#'
-#' @importFrom BiocBaseUtils isCharacter
-#'
-#' @importFrom utils data
-#'
-#' @importFrom dplyr is.tbl
-#'
+}

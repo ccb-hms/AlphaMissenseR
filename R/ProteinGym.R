@@ -337,7 +337,7 @@ ProteinGym_correlation_plot <-
         ggplot(
             aes(y = .data$mean_am, x = .data$mean_dms)
         ) +
-        geom_bin2d(bins = 70) +
+        geom_bin2d(bins = 60) +
         scale_fill_continuous(type = "viridis") +
         theme_classic() +
         labs(title = paste0("UniProt ID: ", uniprotId)) +

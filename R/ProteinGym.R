@@ -191,6 +191,15 @@ pg_match_id <-
         select(UniProt_id, mutant, AlphaMissense, DMS_score) |> 
         na.omit()
     
+    ## Average am and dms scores across multiple studies
+    merged_table <-
+        merged_table |> 
+        group_by(UniProt_id, mutant) |>    
+        summarise(
+            mean_am = mean(AlphaMissense),
+            mean_dms= mean(DMS_score)
+        )
+    
     merged_table
 }
 
@@ -205,87 +214,12 @@ pg_correlate <- function(merged_table){
     
     cor_results <- 
         cor.test(
-            merged_table$AlphaMissense, merged_table$DMS_score, 
+            merged_table$mean_am, merged_table$mean_dms, 
             method=c("spearman"), 
             exact = FALSE
         )
     
     cor_results
-}
-
-#' Prepare dms and alphamissense data for correlation plotting
-#'
-#' @noRd
-#'
-#' @importFrom dplyr left_join mutate case_when mutate_at group_by
-#'     ungroup arrange
-#'
-pg_prepare_data_for_plot <-
-    function(am_table, pg_table)
-{
-    ## Merge am_table and pg_table by `DMS_id` and `mutant`
-    ## Create a temporary identifier identical between datasets `tmp_id`
-    pg_table <- 
-        pg_table |> 
-        mutate(tmp_id = paste(UniProt_id, mutant, sep = "_")) |> 
-        select(UniProt_id, DMS_id, mutant, tmp_id, DMS_score)
-    
-    am_table <- 
-        am_table |> 
-        mutate(tmp_id = paste(UniProt_id, mutant, sep = "_")) |> 
-        select(UniProt_id, DMS_id, mutant, tmp_id, AlphaMissense)
-    
-    both_table <- 
-        left_join(
-            am_table, pg_table, 
-            by = c("UniProt_id", "mutant")
-        ) |> 
-        distinct()
-        
-    am_table <- mutate(
-        am_table,
-        aa_pos = as.integer(
-            gsub(".*?([0-9]+).*", "\\1", .data$protein_variant)
-        )
-    )
-    
-    ## join datasets
-    combined_data <- left_join(
-        am_table,
-        cv_table,
-        by = c('uniprot_id', 'protein_variant')
-    )
-    
-    ## add color code matching AM and CV labels
-    combined_data <-
-        combined_data |>
-        mutate(
-            code_color = case_when(
-                !is.na(.data$cv_class) & .data$cv_class == "benign" ~
-                    "CV benign",
-                !is.na(.data$cv_class) & .data$cv_class == "pathogenic" ~
-                    "CV pathogenic",
-                is.na(.data$cv_class) & .data$am_class == "pathogenic" ~
-                    "AM pathogenic",
-                is.na(.data$cv_class) & .data$am_class == "benign" ~
-                    "AM benign",
-                is.na(.data$cv_class) & .data$am_class == "ambiguous" ~
-                    "AM ambiguous")
-        ) |>
-        mutate_at(vars(.data$code_color), factor) |>
-        arrange(.data$code_color)
-    
-    ## Grab the thresholds for AM pathogenicity to plot
-    combined_data <-
-        combined_data |>
-        group_by(.data$am_class) |>
-        mutate(
-            max = max(.data$am_pathogenicity, na.rm=TRUE),
-            min = min(.data$am_pathogenicity, na.rm=TRUE)
-        ) |>
-        ungroup()
-    
-    combined_data
 }
 
 #'
@@ -396,7 +330,7 @@ ProteinGym_correlation_plot <-
     pg_density_plot <- 
         merged_table |> 
         ggplot(
-            aes(y = .data$AlphaMissense, x = .data$DMS_score)
+            aes(y = .data$mean_am, x = .data$mean_dms)
         ) +
         geom_bin2d(bins = 70) +
         scale_fill_continuous(type = "viridis") +

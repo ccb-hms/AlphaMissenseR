@@ -337,7 +337,7 @@ ProteinGym_correlation_plot <-
         theme_classic() +
         labs(title = paste0("UniProt ID: ", uniprotId)) +
         xlab("DMS score") +
-        ylab("AlphaMissense pathogenicity score") +
+        ylab("AlphaMissense score") +
         theme_classic() +
         theme(
             axis.text.x = element_text(size = 16),
@@ -347,7 +347,7 @@ ProteinGym_correlation_plot <-
             legend.title = element_text(size = 16),
             legend.text = element_text(size = 16)
         ) +
-        annotate("text", x=Inf, y = Inf, hjust = 1, vjust = 2,
+        annotate("text", x = Inf, y = Inf, hjust = 1, vjust = 2,
             label = paste0("r = ", format(round(cor_results$estimate, 2)), 
                 '\n',"Pval = ", cor_results$p.value),
             fontface="italic", size = 4

@@ -1,62 +1,44 @@
 #' @rdname ProteinGym
 #'
 #' Load in AlphaMissense DMS supplemental table via ExperimentHub 
-#' Through ProteinGymR later
+#' Through ProteinGymR once available
 #' 
 #' @noRd
 #'
-#' @importFrom dplyr filter as_tibble vars
+#' @importFrom ExperimentHub ExperimentHub
 #'
 pg_am_data <-
     function()
 {
-    # am_table <- ProteinGymR::AlphaMissense_scores()
+    ## Once available: am_table <- ProteinGymR::AlphaMissense_scores()
 
     eh <- ExperimentHub::ExperimentHub()
     am_table <- eh[['EH9554']]
     return(am_table)
 }
 
-#' Load in ProteinGym DMS dataset via ExperimentHub (through ProteinGymR later)
+#' Load in ProteinGym DMS dataset via ExperimentHub
+#' Through ProteinGymR once available
 #' 
 #' @noRd
 #'
-#' @importFrom dplyr filter as_tibble vars
+#' @importFrom ExperimentHub ExperimentHub
 #' 
 pg_dms_data <-
     function()
 {
-    # dms_table <- ProteinGymR::dms_substitutions()
+    ## Once available: dms_table <- ProteinGymR::dms_substitutions()
         
     eh <- ExperimentHub::ExperimentHub()
     dms_table <- eh[['EH9555']]
     return(dms_table)
 }
 
-#' Map Swiss-Prot entry name to UniProt Accession ID
-#' Later, use ProteinGymR function
-#'
-#' @noRd
-#'
-#' @import UniProt.ws
-#' 
-pg_map_accessions <-
-    function(entryNames)
-{
-    # Convert SwissProt entries to UniProt accession ID
-    ws <- UniProt.ws::UniProt.ws()
-    out <- UniProt.ws::select(ws, entryNames, columns = "UniProtKB", 
-                              keytype = "UniProtKB")
-    accessions <- out$Entry
-    
-    return(accessions)
-}
-        
-#' Filter the AlphaMissense table with UniprotID
+#' Filter AlphaMissense table with uID
 #'
 #' @noRd
 #' 
-#' @importFrom dplyr filter select pull as_tibble vars rename mutate
+#' @importFrom dplyr filter pull as_tibble rename_with mutate case_when
 #' @importFrom queryup query_uniprot
 #'
 pg_filter_am_table <-
@@ -70,7 +52,7 @@ pg_filter_am_table <-
             "`ProteinGymR::am_scores()`"
         ))
         
-        ## Load default AlphaMissense data from EH
+        ## Load default AlphaMissense data
         am_table <- pg_am_data()
         
         ## Rename columns to match default dms_table
@@ -118,11 +100,11 @@ pg_filter_am_table <-
     alphamissense_table
 }
 
-#' Filter the ProteinGym DMS table with UniprotID
+#' Filter the ProteinGym DMS table with uID
 #'
 #' @noRd
 #'
-#' @importFrom dplyr filter as_tibble vars bind_rows
+#' @importFrom dplyr as_tibble bind_rows
 #' @importFrom purrr keep
 #'
 pg_filter_dms_table <-
@@ -138,11 +120,11 @@ pg_filter_dms_table <-
         pg_table <- pg_dms_data()
     }
     
-    ## Take pg_table and filter for the uID, rbind into one data.frame
-    filtered_dfs <- purrr::keep(pg_table, ~ any(.x$UniProt_id == uID))
+    ## Filter pg_table for uID, rbind into one data.frame
+    filtered_pg <- purrr::keep(pg_table, ~ any(.x$UniProt_id == uID))
     
     dms_table <-
-        filtered_dfs |>
+        filtered_pg |>
         bind_rows() |>
         as_tibble()
     
@@ -161,7 +143,7 @@ pg_filter_dms_table <-
 #'
 #' @noRd
 #'
-#' @importFrom dplyr left_join
+#' @importFrom dplyr left_join select group_by summarise
 #' 
 pg_match_id <- 
     function(am_table, pg_table)
@@ -180,7 +162,7 @@ pg_match_id <-
         select(UniProt_id, mutant, AlphaMissense, DMS_score) |> 
         na.omit()
     
-    ## Average am and dms scores across multiple studies
+    ## Average am and dms scores across multiple studies per protein
     merged_table <-
         merged_table |> 
         group_by(UniProt_id, mutant) |>    
@@ -196,11 +178,9 @@ pg_match_id <-
 #'
 #' @noRd
 #'
-#' @importFrom dplyr left_join mutate case_when mutate_at group_by
-#'     ungroup arrange
-#'
-pg_correlate <- function(merged_table){
-    
+pg_correlate <- 
+    function(merged_table)
+{
     cor_results <- 
         cor.test(
             merged_table$mean_am, merged_table$mean_dms, 
@@ -211,26 +191,25 @@ pg_correlate <- function(merged_table){
     cor_results
 }
 
-#'
 #' @rdname ProteinGym
 #' 
 #' @title Integrate ProteinGym DMS and AlphaMissense Pathogenicity Scores
 #' 
-#' @description `ProteinGym_correlation_plot()` runs a Spearman correlation between 
-#'    ProteinGym deep mutational scanning (DMS) assay scores against 
-#'    AlphaMissense predicted scores. Returns a ggplot object for visualization.
+#' @description `ProteinGym_correlation_plot()` runs a Spearman correlation 
+#'    between ProteinGym deep mutational scanning (DMS) assay scores and 
+#'    AlphaMissense predicted pathogenicity scores. 
+#'    Returns a ggplot object for visualization.
 #'
 #' @param uniprotId `character()` a valid UniProt accession identifier.
 #' 
 #' @param alphamissense_table a table containing AlphaMissense predictions 
-#'    for variants matching ProteinGym substitution mutants. The default 
-#'    table is derived from the supplemental data of the AlphaMissense paper. 
+#'    for variants matching ProteinGym substitution mutants. The default is 
+#'    the supplemental table from the AlphaMissense paper. 
 #'    Alternatively, a user-defined [`tibble::tbl_df`] or [`data.frame`]
 #'    can be supplied.
 #'
-#' @param DMS_table a table containing deep mutational scanning (DMS) 
-#'    assay scores for protein variants matching AlphaMissense. The default 
-#'    table loads in substitutions from 
+#' @param dms_table a table containing deep mutational scanning (DMS) 
+#'    assay scores for mutations. The default table loads substitutions from 
 #'    [ProteinGym](https://proteingym.org/download).
 #'    Alternatively, a user-defined [`tibble::tbl_df`] or [`data.frame`]
 #'    can be supplied.
@@ -240,14 +219,14 @@ pg_correlate <- function(merged_table){
 #' For `ProteinGym_correlation_plot()`, 
 #'    `alphamissense_table` columns must include:
 #'
-#' - `Uniprot_ID`: UniProt accession identifier.
-#' - `variant_id`: Mutant identifier string matching ProteinGym. 
+#' - `UniProt_id`: UniProt accession identifier.
+#' - `mutant`: Mutant identifier string matching the dms_table format. 
 #'    Protein position in the middle, and the reference and mutant 
 #'    amino acid residues to the left and right of the position, respectively.
 #' - `AlphaMissense`: AlphaMissense pathogenicity score.
 #'
 #'
-#' `DMS_table` columns must include:
+#' `dms_table` columns must include:
 #'
 #' - `UniProt_id`: UniProt accession identifier.
 #' - `mutant`: Mutant identifier string matching AlphaMissense variants. 
@@ -258,9 +237,9 @@ pg_correlate <- function(merged_table){
 #' - `DMS_score`: Experimental measurement in the DMS assay. 
 #'    Higher values indicate higher fitness of the mutated protein.
 #'
-#' @return `ProteinGym_correlation_plot()` returns a `ggplot` object visualizing the 
-#'    Spearman correlation between experimental DMS scores and AlphaMissense 
-#'    predicted scores. In our case, a stronger negative correlation correspond 
+#' @return `ProteinGym_correlation_plot()` returns a `ggplot` object visualizing 
+#'    the Spearman correlation between experimental DMS scores and AlphaMissense 
+#'    predicted scores. Generally, a stronger negative correlation corresponds 
 #'    to a stronger relationship between the two measures.
 #'
 #' @examples
@@ -281,19 +260,17 @@ pg_correlate <- function(merged_table){
 #' Neural Information Processing Systems} (Vol. 36, pp. 64331-64379). 
 #' Curran Associates, Inc.
 #' 
-#' @importFrom ggplot2 ggplot geom_bin2d aes scale_colour_manual element_text
-#'     scale_fill_manual scale_shape_manual scale_size_manual scale_fill_continuous
-#'     element_blank scale_discrete_manual geom_hline labs xlab ylab 
-#'     theme_classic annotate theme
+#' @importFrom ggplot2 ggplot geom_bin2d aes element_text labs xlab ylab
+#'     scale_fill_continuous theme_classic annotate theme
 #' 
 #' @export
 ProteinGym_correlation_plot <-
     function(uniprotId, alphamissense_table, dms_table)
 {
-    ## Validate uniprotId to start filtering alphamissense and clinvar tables
+    ## Validate uniprotId
     stopifnot(isCharacter(uniprotId))
     
-    ## Filter AM and PG tables with uniProtID
+    ## Filter AM and DMS tables with uniprotId
     alphamissense_table <-
         pg_filter_am_table(
             am_table = alphamissense_table,
@@ -306,7 +283,7 @@ ProteinGym_correlation_plot <-
             uID = uniprotId
         )
     
-    ## Join tables by UniProt ID
+    ## Join tables by uniprotId
     merged_table <-
         pg_match_id(am_table = alphamissense_table, pg_table = dms_table)
     
@@ -328,7 +305,6 @@ ProteinGym_correlation_plot <-
         ) +
         geom_bin2d(bins = 60) +
         scale_fill_continuous(type = "viridis") +
-        theme_classic() +
         labs(title = paste0("UniProt ID: ", uniprotId)) +
         xlab("DMS score") +
         ylab("AlphaMissense score") +

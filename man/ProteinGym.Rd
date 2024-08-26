@@ -10,41 +10,41 @@ ProteinGym_correlation_plot(uniprotId, alphamissense_table, dms_table)
 \item{uniprotId}{\code{character()} a valid UniProt accession identifier.}
 
 \item{alphamissense_table}{a table containing AlphaMissense predictions
-for variants matching ProteinGym substitution mutants. The default
-table is derived from the supplemental data of the AlphaMissense paper.
+for variants matching ProteinGym substitution mutants. The default is
+the supplemental table from the AlphaMissense paper.
 Alternatively, a user-defined \code{\link[tibble:tbl_df-class]{tibble::tbl_df}} or \code{\link{data.frame}}
 can be supplied.}
 
-\item{DMS_table}{a table containing deep mutational scanning (DMS)
-assay scores for protein variants matching AlphaMissense. The default
-table loads in substitutions from
+\item{dms_table}{a table containing deep mutational scanning (DMS)
+assay scores for mutations. The default table loads substitutions from
 \href{https://proteingym.org/download}{ProteinGym}.
 Alternatively, a user-defined \code{\link[tibble:tbl_df-class]{tibble::tbl_df}} or \code{\link{data.frame}}
 can be supplied.}
 }
 \value{
-\code{ProteinGym_correlation_plot()} returns a \code{ggplot} object visualizing the
-Spearman correlation between experimental DMS scores and AlphaMissense
-predicted scores. In our case, a stronger negative correlation correspond
+\code{ProteinGym_correlation_plot()} returns a \code{ggplot} object visualizing
+the Spearman correlation between experimental DMS scores and AlphaMissense
+predicted scores. Generally, a stronger negative correlation corresponds
 to a stronger relationship between the two measures.
 }
 \description{
-\code{ProteinGym_correlation_plot()} runs a Spearman correlation between
-ProteinGym deep mutational scanning (DMS) assay scores against
-AlphaMissense predicted scores. Returns a ggplot object for visualization.
+\code{ProteinGym_correlation_plot()} runs a Spearman correlation
+between ProteinGym deep mutational scanning (DMS) assay scores and
+AlphaMissense predicted pathogenicity scores.
+Returns a ggplot object for visualization.
 }
 \details{
 For \code{ProteinGym_correlation_plot()},
 \code{alphamissense_table} columns must include:
 \itemize{
-\item \code{Uniprot_ID}: UniProt accession identifier.
-\item \code{variant_id}: Mutant identifier string matching ProteinGym.
+\item \code{UniProt_id}: UniProt accession identifier.
+\item \code{mutant}: Mutant identifier string matching the dms_table format.
 Protein position in the middle, and the reference and mutant
 amino acid residues to the left and right of the position, respectively.
 \item \code{AlphaMissense}: AlphaMissense pathogenicity score.
 }
 
-\code{DMS_table} columns must include:
+\code{dms_table} columns must include:
 \itemize{
 \item \code{UniProt_id}: UniProt accession identifier.
 \item \code{mutant}: Mutant identifier string matching AlphaMissense variants.

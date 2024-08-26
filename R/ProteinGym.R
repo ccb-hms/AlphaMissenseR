@@ -57,7 +57,8 @@ pg_map_accessions <-
 #' @noRd
 #' 
 #' @importFrom dplyr filter select pull as_tibble vars rename mutate
-#' 
+#' @importFrom queryup query_uniprot
+#'
 pg_filter_am_table <-
     function(am_table, uID)
 {
@@ -69,33 +70,8 @@ pg_filter_am_table <-
             "`ProteinGymR::am_scores()`"
         ))
         
+        ## Load default AlphaMissense data from EH
         am_table <- pg_am_data()
-        
-        ## Add UniProt accessions to am_table
-        swissprot_names <- am_table |> 
-            select(.data$Uniprot_ID) |> 
-            unique() |> pull()
-        
-        acc <- pg_map_accessions(swissprot_names)
-        
-        accessions_lookup <-
-            cbind(swissprot_names, acc) |> 
-            as.data.frame()
-        
-        ## Replace default SwissProt with corresponding UniProt in am_table
-        selected_swiss_protein <- 
-            accessions_lookup |> 
-            filter(.data$acc == uID) |> 
-            pull(.data$swissprot_names)
-        
-        am_table <-
-            am_table |>
-            mutate(
-                Uniprot_ID = case_when(
-                    (.data$Uniprot_ID) == selected_swiss_protein ~ uID,
-                    TRUE ~ as.character(Uniprot_ID)
-                )
-            )
         
         ## Rename columns to match default dms_table
         new_cols <- c('UniProt_id', 'mutant')
@@ -105,6 +81,21 @@ pg_filter_am_table <-
             rename_with(
                 ~ new_cols, 
                 .cols = c('Uniprot_ID', 'variant_id')
+            )
+        
+        ## Default am_table IDs are in SwissProt. Convert to UniProt
+        query <- list("accession_id" = uID)
+        res <- query_uniprot(query = query, show_progress = TRUE)
+        swissID <- res |> pull(`Entry Name`)
+       
+        ## Replace swissID observations with uID
+        am_table <-
+            am_table |>
+            mutate(
+                UniProt_id = case_when(
+                    (.data$UniProt_id) == swissID ~ uID,
+                    TRUE ~ as.character(UniProt_id)
+                )
             )
         
         am_table
@@ -117,7 +108,6 @@ pg_filter_am_table <-
         as_tibble()
 
     ## Check if table is empty after filtering
-    ## This will work for a tibble or a data.frame
     if (!NROW(alphamissense_table)) {
         stop(
             "no AlphaMissense information found for the protein ",
@@ -128,7 +118,6 @@ pg_filter_am_table <-
     alphamissense_table
 }
 
-#'
 #' Filter the ProteinGym DMS table with UniprotID
 #'
 #' @noRd

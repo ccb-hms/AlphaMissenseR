@@ -239,8 +239,9 @@ pg_correlate <-
 #'
 #' @return `ProteinGym_correlation_plot()` returns a `ggplot` object visualizing 
 #'    the Spearman correlation between experimental DMS scores and AlphaMissense 
-#'    predicted scores. Generally, a stronger negative correlation corresponds 
-#'    to a stronger relationship between the two measures.
+#'    predicted scores and prints the r and p-value of the analysis to console. 
+#'    Generally, a stronger negative correlation corresponds to a tighter 
+#'    relationship between the two measures.
 #'
 #' @examples
 #' 
@@ -316,12 +317,10 @@ ProteinGym_correlation_plot <-
             axis.title.x = element_text(size = 16, vjust = 0),
             legend.title = element_text(size = 16),
             legend.text = element_text(size = 16)
-        ) +
-        annotate("text", x = Inf, y = Inf, hjust = 1, vjust = 2,
-            label = paste0("r = ", format(round(cor_results$estimate, 2)), 
-                '\n',"Pval = ", cor_results$p.value),
-            fontface="italic", size = 4
         )
+    
+    print(paste0("r = ", format(round(cor_results$estimate, 2)), 
+                "; Pval = ", cor_results$p.value))
     
     pg_density_plot
 }

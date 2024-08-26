@@ -24,8 +24,9 @@ can be supplied.}
 \value{
 \code{ProteinGym_correlation_plot()} returns a \code{ggplot} object visualizing
 the Spearman correlation between experimental DMS scores and AlphaMissense
-predicted scores. Generally, a stronger negative correlation corresponds
-to a stronger relationship between the two measures.
+predicted scores and prints the r and p-value of the analysis to console.
+Generally, a stronger negative correlation corresponds to a tighter
+relationship between the two measures.
 }
 \description{
 \code{ProteinGym_correlation_plot()} runs a Spearman correlation

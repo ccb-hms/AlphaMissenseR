@@ -241,6 +241,62 @@ r3dmol::r3dmol() |>
     r3dmol::m_zoom_to()
 ```
 
+# Visualizing genomic tracks
+
+The variant effect prediction data can also be visualized in a genome
+browser view. This allows the user to explore the predicted
+pathogenicity of single nucleotide missense mutations in a gene of
+interest.  This multi-scale visualization is based on [Gosling][], a
+grammar-based toolkit for scalable and interactive genomics data
+visualization.
+
+[Gosling]: https://gosling-lang.org/
+
+For demonstration, we create a `GPos` object for a protein of interest.
+
+```{r mk_gpos, message=FALSE}
+gpos <-
+    am_data("hg38") |>
+    filter(uniprot_id == "Q1W6H9") |>
+    to_GPos()
+```
+
+The function `plot_granges` invokes functionality from the
+[shiny.gosling][] package to produce an interactive genome track plot
+in which the pathogenicity score for each point mutation in a linear
+genomic track.
+
+The resulting plot is a [Shiny][] app that can be displayed when
+running the following command in an interactive R session.
+
+[shiny.gosling]: https://bioconductor.org/packages/shiny.gosling
+[Shiny]: https://shiny.posit.co/
+
+```{r gosling_bar}
+gosling_plot(
+    gpos, plot_type = "bar",
+    title = "Q1W6H9 track",
+    subtitle = "bar plot example"
+)
+```
+
+![Bar plot for Q1W6H9](images/gosling_bar.png)
+
+Alternatively, a multiscale-lollipop plot can be generated with the
+same function by changing the `plot_type` argument to highlight the
+predicted class outcomes for each mutation (ambigious, benign,
+pathogenic).
+
+```{r gosling_lollipop}
+gosling_plot(
+    gpos, plot_type = "lollipop",
+    title = "Q1W6H9 track",
+    subtitle = "lollipop plot example"
+)
+```
+
+![Lollipop plot for Q1W6H9](images/gosling_lollipop.png)
+
 # Finally
 
 Remember to disconnect and shutdown all managed DuckDB connections.

@@ -14,11 +14,16 @@ knitr::opts_chunk$set(
 )
 ```
 
-Original version: 25 September, 2024
+Original version: 30 September, 2024
 
 ```{r setup, message = FALSE}
 library(AlphaMissenseR)
 library(dplyr)
+library(purrr)
+library(tidyr)
+library(forcats)
+library(ggdist)
+library(gghalves)
 library(ggplot2)
 library(queryup)
 ```
@@ -60,7 +65,7 @@ dms_data <- eh[['EH9555']]
 head(names(dms_data))
 ```
 
-We show names of the first 6 DMS assays in the list. Next, we can access the 
+We show the first 6 DMS assays in the list. Next, we can access the 
 first assay and take a closer look at the data.frame.
 
 ```{r dms assay 1}
@@ -80,19 +85,19 @@ et al. [2023][AlphaMissense], and can also be accessed through `ExperimentHub`.
 
 ```{r am_scores}
 am_scores <- eh[['EH9554']]
-am_scores
+am_scores |> head()
 ```
 
-The `data.frame` shows the `DMS_id` matching to a ProteinGym assay, the 
+The `data.frame` shows the `DMS_id` matching a ProteinGym assay, the 
 UniProt entry name of the protein evaluated, the mutation and position, and 
 the aggregated AlphaMissense score for that mutation. For more details about 
 the table, reference the [AlphaMissense][AlphaMissense] paper.
 
-# Compare DMS scores and AlphaMissense predictions
+# Correlate DMS scores and AlphaMissense predictions
 
-The DMS scores serve as an experimental measure to evaluate the accuracy of
+The DMS scores serve as an experimental measure to compare the accuracy of
 AlphaMissense mutation effect predictions. For a given protein, we can plot the 
-correlation between the two measures and report their Spearman correlation. 
+relationship between the two measures and report their Spearman correlation. 
 
 Here, we demonstrate using the "NUD15_HUMAN" assay. First, we filter both 
 datasets to the chosen assay.
@@ -146,12 +151,12 @@ correlation_plot <-
 correlation_plot
 ```
 
-If a mutation has a strong affect on fitness in the DMS assay, we would expect 
-expect it to be more pathogenic if altered (higher AlphaMissense score). 
+If mutating a residue resulting in lower fitness in the DMS assay, we would 
+expect it to be predicted as pathogenic (higher AlphaMissense score). 
 Therefore, a stronger negative correlation represents a tighter relationship 
-between the two measures. We see this with the NUD15 protein.
+between the two measures. We can see this with the NUD15 protein.
 
-We can print the Spearman correlation.
+We can also print the Spearman correlation.
 
 ```{r}
 cor.test(
@@ -160,7 +165,7 @@ cor.test(
     exact = FALSE
 )
 ```
-The correlation is r = -0.67 and statistically significant.
+The correlation is r = -0.67 and is statistically significant.
 
 
 # Benchmark AlphaMissense with other variant effect prediction models
@@ -168,17 +173,21 @@ The correlation is r = -0.67 and statistically significant.
 Now we can calculate the Spearman correlation across multiple DMS assays in 
 which we have corresponding AlphaMissense scores, and use this metric to 
 benchmark across multiple models aimed at predicting mutation effects. For this
-analysis, we will load in the metric scores ("AUC", "MCC", "NDCG", "Spearman", "Top_recall") for 62 models calculated across the 217 DMS assays from the 
-ProteinGym database available through `ExperimentHub`.
+analysis, we will load in the metric scores for 62 models calculated across the 
+217 DMS assays from the ProteinGym database available through `ExperimentHub`.
 
 ```{r load_metrics}
 metrics_scores <- eh[['EH9593']]
 ```
 
-This is a `list` object where each `data.frame` is shows one of the five
-evaluation metric scores calculated on the DMS assays for 62 models. 
-For demonstration purposes, let's select 10 assays that overlap between the 
-AlphaMissense and ProteinGym databases.
+`metrics_scores` is a `list` object where each element is a `data.frame` 
+corresponding to one of five model evaluation metrics ("AUC", "MCC", "NDCG", 
+"Spearman", "Top_recall") available from ProteinGym. Briefly, these metrics were
+calculated on the DMS assays for 62 models in a zero-shot setting. The 
+[Protein Gym paper][Notin_link] provides more information about these metrics. 
+For our demonstration, we will use the Spearman correlation and choose 10 assays
+that overlap between the AlphaMissense and ProteinGym databases for 
+benchmarking.
 
 ```{r choose10}
 chosen_assays <- c(
@@ -194,10 +203,10 @@ chosen_assays <- c(
     "YAP1_HUMAN_Araya_2012")
 ```
 
-Subset the AlphaMissense scores, DMS scores, and the model metrics to these 10
+Subset the AlphaMissense scores, DMS scores, and the model metrics to these
 chosen assays.
 
-```{r}
+```{r subset}
 am_subset <- 
     am_scores |> 
     filter(DMS_id %in% chosen_assays)
@@ -205,99 +214,151 @@ am_subset <-
 dms_subset <- 
     dms_data[names(dms_data) %in% chosen_assays]
 
+dms_subset <- 
+    bind_rows(dms_subset) |> 
+    as.data.frame()
+
 metric_subset <- 
     metrics_scores |> 
     pluck("Spearman") |> 
-    filter(DMS_ID %in% chosen_assays)
+    filter(DMS_ID %in% chosen_assays) |> 
+    select(-c(Number_of_Mutants, Selection_Type, UniProt_ID, 
+        MSA_Neff_L_category, Taxon))
 ```
 
-```{r}
+The Spearman scores are already calculated for the 62 models in ProteinGym, but 
+we will need to calculate this for AlphaMissense now. Start by merging the DMS 
+and AlphaMissense tables by matching protein mutants.
 
+```{r merge_am_dms}
+merge_am_dms <-
+    left_join(
+        am_subset, dms_subset, 
+        by = c("DMS_id" = "DMS_id", "variant_id" = "mutant"),
+        relationship = "many-to-many"
+    ) |>
+    na.omit()
+
+merge_am_dms |> head()
 ```
 
-```{r am_replace_ids}
-## Grab all UniProt accessions for DMS assay
-unique_ids <- 
-    dms_data |> 
-    sapply(function(x) x|> 
-            pull(UniProt_id) %>% unique()) |>
-    unlist() |>
-    unique()
+`merge_am_dms`shows the AlphaMissense and DMS scores for protein mutants that 
+are present in both datasets.
 
-## Replace AlphaMissense entry name ID observations with accession
-query <- list("accession_id" = unique_ids)
-res <- query_uniprot(query = query, show_progress = TRUE)
-entry_names <- res |> pull(`Entry Name`)
-
-## Create a lookup table
-lookup <-
-    cbind(entry_names, query[[1]]) |>
-    as.data.frame()
-
-new_cols <- c('entry_name', 'accession')
-
-lookup <- 
-    lookup |> 
-    rename_with(
-        ~ new_cols, 
-            .cols = c('entry_names', 'V2')
+```{r calc_spearman}
+spearman_res <- 
+    merge_am_dms |> 
+    group_by(DMS_id) |> 
+    summarize(
+        AlphaMissense = cor(AlphaMissense, DMS_score, method = "spearman")
+    ) |> 
+    mutate(
+        AlphaMissense = abs(AlphaMissense)
     )
 
-new_names <- c(entry_names = "entry_name", V2 = "accession")
+DMS_IDs <- metric_subset |> pull(DMS_ID)
 
-lookup <- 
-    lookup |> 
-    rename(all_of(new_names))
+metric_subset <- 
+    metric_subset |> 
+    select(-DMS_ID) |> 
+    abs() |> 
+    mutate(DMS_id = DMS_IDs)
 
-# Replace the values via lookup table
-am_updated <- 
-    am_scores |>
+all_sp <- 
     left_join(
-        lookup, 
-        by = c("Uniprot_ID" = "entry_name")
-    ) |>
-    mutate(
-        Uniprot_ID = coalesce(accession, Uniprot_ID)
+        metric_subset, spearman_res, 
+        by = "DMS_id"
+    )
+```
+
+`all_sp` is a table of Spearman correlation values (absolute values to handle difference in directionality of certain DMS assays) across the ProteinGym and AlphaMissense models for the 10 assays.
+
+To prepare for plotting, we'll pivot our dataset to long format and reorder our 
+models from the highest mean Spearman to the lowest.
+
+```{r pivot_long}
+res_long <- 
+    all_sp |> 
+    select(-DMS_id) |> 
+    pivot_longer(
+        cols = everything(), 
+        names_to = "model", 
+        values_to = "score"
     ) |> 
-    select(-accession)
+    group_by(model) |> 
+    mutate(
+        model_mean = mean(score)
+    ) |> 
+    ungroup() |> 
+    mutate(
+        model = fct_reorder(model, model_mean, .desc = TRUE)
+    )
 
-# Put it into a list split by protein
-am_list <- am_updated |>  
-    group_by(Uniprot_ID) |> 
-    group_split()
+model_means <- 
+    res_long |> 
+    group_by(model) |> 
+    summarise(
+        model_mean = unique(model_mean)
+    ) |> 
+    arrange(desc(model_mean))
+
+topmodels <- model_means |> 
+    filter(row_number() <= 10) |> 
+    pull(model) |> 
+    droplevels()
 ```
 
-We have our AlphaMissense table with UniProt IDs that match our DMS assays.
-Now find the Spearman correlation averaged for each protein.
+For the purposes of our example, select the top 10 performing models.
 
-```{r correlate_proteins}
-library(data.table)
-
-# Combine the list elements
-combined_df <- rbindlist(dms_data)
+```{r choose_top_models}
+top_spearmans <- 
+    res_long |> 
+    filter(model %in% topmodels) |> 
+    droplevels()
 ```
 
-```{r plot_P37023, fig.width = 7}
-clinvar_plot(uniprotId = "P37023")
+Visualize with a raincloud plot.
+
+```{r plot}
+top_spearmans |> 
+    ggplot(
+        aes(x = model, y = score, fill = model, group = model)
+    ) + 
+    stat_halfeye(
+        adjust = .5, 
+        width = .6, 
+        .width = 0, 
+        justification = -.2, 
+        point_colour = NA
+    ) + 
+    geom_boxplot(
+        width = .15, 
+        outlier.shape = NA
+    ) +
+    geom_half_point(
+        side = "l", 
+        range_scale = .4, 
+        alpha = .2
+    ) +
+    coord_cartesian(clip = "off") +
+    scale_fill_discrete(name = "Models") +
+    theme_classic() +
+    ylab("Spearman") +
+    theme(
+        axis.text.x = element_text(size = 16),
+        axis.text.y = element_text(size = 16),
+        axis.title.y = element_text(size = 16),
+        axis.title.x = element_blank(),
+        legend.title = element_text(size = 16),
+        legend.text = element_text(size = 11)
+    )
 ```
 
-We returned a `ggplot` object which overlays ClinVar classifications onto
-AlphaMissense predicted scores. Blue, gray, and red colors represent
-pathogenicity classifications for "likely benign", "ambiguous", or "likely
-pathogenic", respectively. Large, bolded points are ClinVar variants colored
-according to their clinical classification, while smaller points in the
-background are AlphaMissense predictions.
-We can note a discrepancy between the clinically-validated annotations and the
-AlphaMissense predictions around position 50. AlphaMissense seems to predict
-several variants in that region as likely benign, while ClinVar identifies them
-as pathogenic.
-Because the ClinVar dataset is not exhaustive (not all proteins have been
-clinically-assessed), there may be proteins where information is not available.
-In this case, the function will provide an error.
-Remember to disconnect from the database.
-```{r, close_db}
-db_disconnect_all()
-```
+For the Spearman correlation, AlphaMissense performed the best across the DMS 
+assays selected. For the purposes of this vignette, we demonstrate with just 10 
+assays, but it is possible to apply this framework across all 217 DMS assays
+available in ProteinGym.
+
 # Session information {.unnumbered}
 ```{r}
 sessionInfo()

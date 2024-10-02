@@ -14,7 +14,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-Original version: 30 September, 2024
+Original version: 2 October, 2024
 
 ```{r setup, message = FALSE}
 library(AlphaMissenseR)
@@ -50,6 +50,10 @@ metric scores ("AUC", "MCC", "NDCG", "Spearman", "Top_recall") for 62 models
 calculated across the 217 DMS assays, offering a consistent and extensive 
 benchmarking framework across approaches.
 
+This vignette demonstrates how to compare AlphaMissense predictions to DMS 
+scores on a per-protein basis, and also how to benchmark AlphaMissense against
+other models aimed at predicting protein mutation effects.
+
 [pg_link]: https://proteingym.org/
 [Notin_link]: https://papers.nips.cc/paper_files/paper/2023/hash/cac723e5ff29f65e3fcbb0739ae91bee-Abstract-Datasets_and_Benchmarks.html
 [AlphaMissense]: https://www.science.org/doi/10.1126/science.adg7492
@@ -76,7 +80,7 @@ Each element of the list is an individual DMS assay with the following
 information for each column: the UniProt protein identifier, the DMS 
 experiment assay identifier, the mutant at a given protein position, the mutated
 protein sequence, the recorded DMS score, and a binary DMS score bin 
-categorizing whether the mutation has an affect on fitness (1) or not (0). For 
+categorizing whether the mutation has an effect on fitness (1) or not (0). For 
 more details, reference the publication from Notin et al. [2023][Notin_link].
 
 A supplementary table of AlphaMissense pathogencity scores for ~1.6 M 
@@ -128,7 +132,7 @@ merged_table <-
 
 Now, we plot the correlation.
 
-```{r dms_am_plot}
+```{r dms_am_plot, fig.width=6, fig.height=5}
 correlation_plot <- 
     merged_table |> 
     ggplot(
@@ -158,10 +162,10 @@ between the two measures. We can see this with the NUD15 protein.
 
 We can also print the Spearman correlation.
 
-```{r}
+```{r corrtest}
 cor.test(
     merged_table$AlphaMissense, merged_table$DMS_score, 
-    method=c("spearman"), 
+    method="spearman", 
     exact = FALSE
 )
 ```
@@ -185,11 +189,12 @@ corresponding to one of five model evaluation metrics ("AUC", "MCC", "NDCG",
 "Spearman", "Top_recall") available from ProteinGym. Briefly, these metrics were
 calculated on the DMS assays for 62 models in a zero-shot setting. The 
 [Protein Gym paper][Notin_link] provides more information about these metrics. 
-For our demonstration, we will use the Spearman correlation and choose 10 assays
-that overlap between the AlphaMissense and ProteinGym databases for 
-benchmarking.
 
-```{r choose10}
+To demonstrate, we will benchmarking using the Spearman correlation 
+calculated on 10 DMS assays for 5 models. The following code subsets and 
+wrangles the data for plotting.
+
+```{r prep_data}
 chosen_assays <- c(
     "A0A1I9GEU1_NEIME_Kennouche_2019", 
     "A0A192B1T2_9HIV1_Haddox_2018", 
@@ -201,12 +206,7 @@ chosen_assays <- c(
     "UBC9_HUMAN_Weile_2017", 
     "TPK1_HUMAN_Weile_2017",
     "YAP1_HUMAN_Araya_2012")
-```
 
-Subset the AlphaMissense scores, DMS scores, and the model metrics to these
-chosen assays.
-
-```{r subset}
 am_subset <- 
     am_scores |> 
     filter(DMS_id %in% chosen_assays)
@@ -224,13 +224,7 @@ metric_subset <-
     filter(DMS_ID %in% chosen_assays) |> 
     select(-c(Number_of_Mutants, Selection_Type, UniProt_ID, 
         MSA_Neff_L_category, Taxon))
-```
 
-The Spearman scores are already calculated for the 62 models in ProteinGym, but 
-we will need to calculate this for AlphaMissense now. Start by merging the DMS 
-and AlphaMissense tables by matching protein mutants.
-
-```{r merge_am_dms}
 merge_am_dms <-
     left_join(
         am_subset, dms_subset, 
@@ -238,14 +232,12 @@ merge_am_dms <-
         relationship = "many-to-many"
     ) |>
     na.omit()
-
-merge_am_dms |> head()
 ```
 
-`merge_am_dms`shows the AlphaMissense and DMS scores for protein mutants that 
-are present in both datasets.
+The Spearman scores are already calculated for the 62 models in ProteinGym, but 
+we will need to calculate this for AlphaMissense. 
 
-```{r calc_spearman}
+```{r calc_sp}
 spearman_res <- 
     merge_am_dms |> 
     group_by(DMS_id) |> 
@@ -271,10 +263,11 @@ all_sp <-
     )
 ```
 
-`all_sp` is a table of Spearman correlation values (absolute values to handle difference in directionality of certain DMS assays) across the ProteinGym and AlphaMissense models for the 10 assays.
+`all_sp` is a table of Spearman correlation values (absolute values to handle 
+difference in directionality of certain DMS assays) across the ProteinGym and 
+AlphaMissense models for the 10 assays.
 
-To prepare for plotting, we'll pivot our dataset to long format and reorder our 
-models from the highest mean Spearman to the lowest.
+Prepare the data for plotting. 
 
 ```{r pivot_long}
 res_long <- 
@@ -303,14 +296,10 @@ model_means <-
     arrange(desc(model_mean))
 
 topmodels <- model_means |> 
-    filter(row_number() <= 10) |> 
+    filter(row_number() <= 5) |> 
     pull(model) |> 
     droplevels()
-```
 
-For the purposes of our example, select the top 10 performing models.
-
-```{r choose_top_models}
 top_spearmans <- 
     res_long |> 
     filter(model %in% topmodels) |> 
@@ -319,7 +308,7 @@ top_spearmans <-
 
 Visualize with a raincloud plot.
 
-```{r plot}
+```{r raincloud, fig.width=7, fig.height=4}
 top_spearmans |> 
     ggplot(
         aes(x = model, y = score, fill = model, group = model)
@@ -345,7 +334,7 @@ top_spearmans |>
     theme_classic() +
     ylab("Spearman") +
     theme(
-        axis.text.x = element_text(size = 16),
+        axis.text.x = element_text(size = 12, angle = -10),
         axis.text.y = element_text(size = 16),
         axis.title.y = element_text(size = 16),
         axis.title.x = element_blank(),
@@ -354,10 +343,9 @@ top_spearmans |>
     )
 ```
 
-For the Spearman correlation, AlphaMissense performed the best across the DMS 
-assays selected. For the purposes of this vignette, we demonstrate with just 10 
-assays, but it is possible to apply this framework across all 217 DMS assays
-available in ProteinGym.
+AlphaMissense performed the based on the 10 assays we chose. For a realistic 
+and comprehensive benchmark, one would want to apply this framework across all 
+217 DMS assays available in ProteinGym.
 
 # Session information {.unnumbered}
 ```{r}

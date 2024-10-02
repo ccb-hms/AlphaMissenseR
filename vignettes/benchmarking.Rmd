@@ -132,7 +132,7 @@ merged_table <-
 
 Now, we plot the correlation.
 
-```{r dms_am_plot, fig.width=6, fig.height=5}
+```{r dms_am_plot, fig.width=5, fig.height=4}
 correlation_plot <- 
     merged_table |> 
     ggplot(

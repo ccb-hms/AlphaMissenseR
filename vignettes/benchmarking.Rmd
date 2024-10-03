@@ -25,7 +25,6 @@ library(forcats)
 library(ggdist)
 library(gghalves)
 library(ggplot2)
-library(queryup)
 ```
 
 # Introduction
@@ -67,13 +66,6 @@ eh <- ExperimentHub::ExperimentHub()
 dms_data <- eh[['EH9555']]
 
 head(names(dms_data))
-```
-
-We show the first 6 DMS assays in the list. Next, we can access the 
-first assay and take a closer look at the data.frame.
-
-```{r dms assay 1}
-head(dms_data[[1]])
 ```
 
 Each element of the list is an individual DMS assay with the following
@@ -132,7 +124,7 @@ merged_table <-
 
 Now, we plot the correlation.
 
-```{r dms_am_plot, fig.width=5, fig.height=4}
+```{r dms_am_plot, fig.width=7, fig.height=5}
 correlation_plot <- 
     merged_table |> 
     ggplot(
@@ -308,7 +300,7 @@ top_spearmans <-
 
 Visualize with a raincloud plot.
 
-```{r raincloud, fig.width=7, fig.height=4}
+```{r raincloud, fig.width=8, fig.height=5}
 top_spearmans |> 
     ggplot(
         aes(x = model, y = score, fill = model, group = model)

@@ -49,8 +49,8 @@ metric scores ("AUC", "MCC", "NDCG", "Spearman", "Top_recall") for 62 models
 calculated across the 217 DMS assays, offering a consistent and extensive 
 benchmarking framework across approaches.
 
-This vignette demonstrates how to compare AlphaMissense predictions to DMS 
-scores on a per-protein basis, and also how to benchmark AlphaMissense against
+This vignette demonstrates how to 1) compare AlphaMissense predictions to DMS 
+scores on a per-protein basis, and 2) how to benchmark AlphaMissense against
 other models aimed at predicting protein mutation effects.
 
 [pg_link]: https://proteingym.org/
@@ -72,7 +72,7 @@ Each element of the list is an individual DMS assay with the following
 information for each column: the UniProt protein identifier, the DMS 
 experiment assay identifier, the mutant at a given protein position, the mutated
 protein sequence, the recorded DMS score, and a binary DMS score bin 
-categorizing whether the mutation has an effect on fitness (1) or not (0). For 
+categorizing whether the mutation has high (1) or low fitness (0). For 
 more details, reference the publication from Notin et al. [2023][Notin_link].
 
 A supplementary table of AlphaMissense pathogencity scores for ~1.6 M 
@@ -124,7 +124,7 @@ merged_table <-
 
 Now, we plot the correlation.
 
-```{r dms_am_plot, fig.width=7, fig.height=5}
+```{r dms_am_plot, fig.width=5, fig.height=3.5}
 correlation_plot <- 
     merged_table |> 
     ggplot(
@@ -147,10 +147,11 @@ correlation_plot <-
 correlation_plot
 ```
 
-If mutating a residue resulting in lower fitness in the DMS assay, we would 
-expect it to be predicted as pathogenic (higher AlphaMissense score). 
-Therefore, a stronger negative correlation represents a tighter relationship 
-between the two measures. We can see this with the NUD15 protein.
+If mutating a residue resulted in reduced fitness in the DMS assay 
+(low DMS score), we would expect it to be predicted as pathogenic 
+(higher AlphaMissense score). Therefore, a stronger negative correlation 
+represents a tighter relationship between the two measures. We can see this 
+with the NUD15 protein.
 
 We can also print the Spearman correlation.
 
@@ -166,7 +167,7 @@ The correlation is r = -0.67 and is statistically significant.
 
 # Benchmark AlphaMissense with other variant effect prediction models
 
-Now we can calculate the Spearman correlation across multiple DMS assays in 
+We can calculate the Spearman correlation across multiple DMS assays in 
 which we have corresponding AlphaMissense scores, and use this metric to 
 benchmark across multiple models aimed at predicting mutation effects. For this
 analysis, we will load in the metric scores for 62 models calculated across the 
@@ -184,7 +185,7 @@ calculated on the DMS assays for 62 models in a zero-shot setting. The
 
 To demonstrate, we will benchmarking using the Spearman correlation 
 calculated on 10 DMS assays for 5 models. The following code subsets and 
-wrangles the data for plotting.
+merges the relevant datasets.
 
 ```{r prep_data}
 chosen_assays <- c(
@@ -226,8 +227,8 @@ merge_am_dms <-
     na.omit()
 ```
 
-The Spearman scores are already calculated for the 62 models in ProteinGym, but 
-we will need to calculate this for AlphaMissense. 
+The Spearman scores are already provided for the 62 models in the ProteinGym 
+metrics table, but we will need to calculate this for AlphaMissense. 
 
 ```{r calc_sp}
 spearman_res <- 
@@ -300,7 +301,7 @@ top_spearmans <-
 
 Visualize with a raincloud plot.
 
-```{r raincloud, fig.width=8, fig.height=5}
+```{r raincloud, fig.width=7, fig.height=4.5}
 top_spearmans |> 
     ggplot(
         aes(x = model, y = score, fill = model, group = model)
@@ -326,7 +327,7 @@ top_spearmans |>
     theme_classic() +
     ylab("Spearman") +
     theme(
-        axis.text.x = element_text(size = 12, angle = -10),
+        axis.text.x = element_text(size = 11, angle = -12),
         axis.text.y = element_text(size = 16),
         axis.title.y = element_text(size = 16),
         axis.title.x = element_blank(),
@@ -335,9 +336,9 @@ top_spearmans |>
     )
 ```
 
-AlphaMissense performed the based on the 10 assays we chose. For a realistic 
-and comprehensive benchmark, one would want to apply this framework across all 
-217 DMS assays available in ProteinGym.
+Based on the Spearman correlation for the 10 assays we chose, AlphaMissense 
+performed the best. For a realistic and comprehensive benchmark, one would 
+want to apply this framework across all 217 DMS assays available in ProteinGym.
 
 # Session information {.unnumbered}
 ```{r}

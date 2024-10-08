@@ -59,8 +59,6 @@ Suggests:
     ensembldb,
     httr,
     tidyr,
-    forcats,
-    purrr,
     r3dmol, bio3d, shiny, shiny.gosling,
     ggdist, gghalves,
     colorspace,

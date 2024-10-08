@@ -19,9 +19,7 @@ Original version: 2 October, 2024
 ```{r setup, message = FALSE}
 library(AlphaMissenseR)
 library(dplyr)
-library(purrr)
 library(tidyr)
-library(forcats)
 library(ggdist)
 library(gghalves)
 library(ggplot2)
@@ -212,8 +210,7 @@ dms_subset <-
     as.data.frame()
 
 metric_subset <- 
-    metrics_scores |> 
-    pluck("Spearman") |> 
+    metrics_scores[["Spearman"]] |> 
     filter(DMS_ID %in% chosen_assays) |> 
     select(-c(Number_of_Mutants, Selection_Type, UniProt_ID, 
         MSA_Neff_L_category, Taxon))
@@ -266,7 +263,7 @@ Prepare the data for plotting.
 res_long <- 
     all_sp |> 
     select(-DMS_id) |> 
-    pivot_longer(
+    tidyr::pivot_longer(
         cols = everything(), 
         names_to = "model", 
         values_to = "score"
@@ -275,23 +272,18 @@ res_long <-
     mutate(
         model_mean = mean(score)
     ) |> 
-    ungroup() |> 
     mutate(
-        model = fct_reorder(model, model_mean, .desc = TRUE)
-    )
-
-model_means <- 
-    res_long |> 
-    group_by(model) |> 
-    summarise(
-        model_mean = unique(model_mean)
+        model = as.factor(model)
     ) |> 
-    arrange(desc(model_mean))
+    ungroup() 
 
-topmodels <- model_means |> 
-    filter(row_number() <= 5) |> 
-    pull(model) |> 
-    droplevels()
+unique_ordered_models <- unique(res_long$model[order(res_long$model_mean, 
+                                                        decreasing = TRUE)])
+
+res_long$model <- factor(res_long$model, 
+                   levels = unique_ordered_models)
+
+topmodels <- levels(res_long$model)[1:5]
 
 top_spearmans <- 
     res_long |> 
@@ -306,7 +298,7 @@ top_spearmans |>
     ggplot(
         aes(x = model, y = score, fill = model, group = model)
     ) + 
-    stat_halfeye(
+    ggdist::stat_halfeye(
         adjust = .5, 
         width = .6, 
         .width = 0, 
@@ -317,7 +309,7 @@ top_spearmans |>
         width = .15, 
         outlier.shape = NA
     ) +
-    geom_half_point(
+    gghalves::geom_half_point(
         side = "l", 
         range_scale = .4, 
         alpha = .2
